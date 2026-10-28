@@ -13,7 +13,7 @@ const path = require('node:path');
     window.renderMath=true;
     // A small fixture for Anki's documented custom element and frame lifecycle.
     class Mathjax extends HTMLElement {
-      static toUndecorated(html) { return window.renderMath ? html.replace(/\\\((.*?)\\\)/gs,'<anki-mathjax>$1</anki-mathjax>') : html; }
+      static toUndecorated(html) { return window.renderMath ? html.replace(/\\\[(.*?)\\\]/gs,'<anki-mathjax block="true">$1</anki-mathjax>').replace(/\\\((.*?)\\\)/gs,'<anki-mathjax>$1</anki-mathjax>') : html; }
       connectedCallback() {
         if (this.parentElement?.tagName !== 'ANKI-FRAME') {
           const frame=document.createElement('anki-frame'); this.replaceWith(frame); frame.append(this); return;
@@ -35,7 +35,7 @@ const path = require('node:path');
       const clone=field.cloneNode(true);
       clone.querySelectorAll('anki-mathjax').forEach(m=>{
         const box=document.createElement('span');box.innerHTML=m.dataset.mathjax ?? m.innerHTML;
-        m.replaceWith(document.createTextNode('\\('+box.textContent+'\\)'));
+        m.replaceWith(document.createTextNode(m.getAttribute('block')==='true' ? '\\['+box.textContent+'\\]' : '\\('+box.textContent+'\\)'));
       });
       clone.querySelectorAll('anki-frame').forEach(f=>f.replaceWith(...f.childNodes));
       return clone.textContent.replace(/\u00a0/g,' ');
@@ -67,7 +67,15 @@ const path = require('node:path');
   await check('ordinary prices','$5 and $10','$5 and $10',0);
   await check('incomplete','$x^2','$x^2',0);
   await check('empty','$$','$$',0);
-  await check('display math unchanged','$$x+y$$','$$x+y$$',0);
+  await check('block math','$$x+y$$','\\[x+y\\]',1);
+  assert.equal(await page.evaluate(()=>field.querySelector('anki-mathjax').getAttribute('block')),'true');console.log('PASS block component uses display mode');
+  await reset();await page.keyboard.type('$$x^2$');
+  assert.equal(await page.evaluate(()=>stored()),'$$x^2$');
+  await page.keyboard.type('$');
+  assert.equal(await page.evaluate(()=>stored()),'\\[x^2\\]');console.log('PASS block waits for both closing dollars');
+  await page.keyboard.type(' tail');
+  assert.equal(await page.evaluate(()=>stored()),'\\[x^2\\] tail');console.log('PASS caret after block');
+  await check('mixed inline and block','$x$ then $$y^2$$ then $z$','\\(x\\) then \\[y^2\\] then \\(z\\)',3);
   await check('existing delimiters','\\(x + $y$\\)','\\(x + $y$\\)',0);
   await check('legacy latex','[latex]$x$[/latex]','[latex]$x$[/latex]',0);
   await check('HTML special chars','$a<b & c>d$','\\(a<b & c>d\\)',1);
@@ -104,18 +112,24 @@ const path = require('node:path');
       '<code>$code$</code> and \\(existing\\)',
       'HTML $a&lt;b &amp; c&gt;d$',
       '<script>window.manualScriptExecuted=true</script>$safe$',
+      '<div>Older $$x^2$$ and $y$</div>',
+      '$$a<br>+b$$',
+      '$$x<img src="example.png">y$$',
     ];
     window.manualStores=values.map(value=>({value, writes:0, subscribe(callback){callback(this.value);return ()=>{}},set(html){this.value=html;this.writes++}}));
     window.require=name=>{if(name!=='anki/NoteEditor')throw Error(name);return {instances:[{fields:manualStores.map(content=>({editingArea:{content}}))}]}};
     return {result:autoDollarMathjax.scanNote(), values:manualStores.map(s=>s.value), writes:manualStores.map(s=>s.writes), scriptRan:!!window.manualScriptExecuted};
   });
-  assert.deepEqual(manual.result,{converted:6,fieldsChanged:5});
+  assert.deepEqual(manual.result,{converted:9,fieldsChanged:7});
   assert.equal(manual.values[0],'<b>Older \\(x^2\\)</b> <img src="example.png">');
   assert.equal(manual.values[1],'\\(\\frac{1}{2}\\)');
   assert.equal(manual.values[2],'<div>Collapsed \\(a+b\\) and \\(c\\)</div>');
   assert.equal(manual.values[3],'<code>$code$</code> and \\(existing\\)');
   assert.equal(manual.values[4],'HTML \\(a&lt;b &amp; c&gt;d\\)');
-  assert.deepEqual(manual.writes,[1,1,1,0,1,1]);
+  assert.equal(manual.values[6],'<div>Older \\[x^2\\] and \\(y\\)</div>');
+  assert.equal(manual.values[7],'\\[a\n\n+b\\]');
+  assert.equal(manual.values[8],'$$x<img src="example.png">y$$');
+  assert.deepEqual(manual.writes,[1,1,1,0,1,1,1,1,0]);
   assert.equal(manual.scriptRan,false);console.log('PASS scan all stored fields, including collapsed and HTML-only fields');
   assert.deepEqual(await page.evaluate(()=>autoDollarMathjax.scanNote()),{converted:0,fieldsChanged:0});console.log('PASS whole-note scan is idempotent');
   assert.equal(await page.evaluate(()=>{window.require=()=>({instances:[]});return !!autoDollarMathjax.scanNote().error}),true);console.log('PASS unsupported editor produces useful feedback');

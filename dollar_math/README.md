@@ -4,12 +4,14 @@ Type `$x^2$` in an Anki note field. As soon as you type the closing `$`, the
 add-on replaces it with Anki's native inline MathJax equation. The saved field
 contains `\(x^2\)`.
 
+Use `$$x^2$$` for a displayed block equation. This saves as `\[x^2\]`.
+
 ## Convert older notes
 
 Open the note in **Browse** or **Edit Current**, then click **Convert $…$** in
 the editor toolbar. The button scans every field of that note, including
 collapsed fields and fields displayed as HTML, and converts completed `$…$`
-expressions. Anki saves the changes normally and reports how many expressions
+expressions to inline MathJax and `$$…$$` expressions to block MathJax. Anki saves the changes normally and reports how many expressions
 were converted. You can also use it on a note you are adding.
 
 This scans the current note, including the fields used on both sides of its
@@ -34,8 +36,10 @@ editor's options menu. The equation will also render when reviewing the card.
 | `$E=mc^2$` | `\(E=mc^2\)` |
 | `$\frac{1}{2}$` | `\(\frac{1}{2}\)` |
 | `$\alpha + \beta$` | `\(\alpha + \beta\)` |
+| `$$x^2 + y^2 = z^2$$` | `\[x^2 + y^2 = z^2\]` |
 
-Use **one dollar sign before and one after** the expression. Write normal TeX
+Use **one dollar sign before and one after** for inline equations, or **two
+dollar signs before and two after** for block equations. Write normal TeX
 inside them; the add-on changes the delimiters, rather than translating prose
 into TeX. For example, use `\frac{1}{2}` for a stacked fraction.
 
@@ -47,15 +51,17 @@ into TeX. For example, use `\frac{1}{2}` for a stacked fraction.
 - Continue typing after an equation. Click it to edit it using Anki's controls.
 - Preserves formatting outside the expression. Formatting inside the expression
   becomes plain TeX, as required by MathJax.
-- Ignores empty pairs, `$$…$$`, incomplete expressions, existing equations,
-  HTML code blocks, and the tags input. Does not convert across line breaks.
+- Converts `$…$` to inline and `$$…$$` to block MathJax. Block expressions can
+  span line breaks. Inline expressions do not cross line breaks.
+- Ignores empty pairs, incomplete expressions, existing equations,
+  HTML code blocks, and the tags input. Equations do not cross images or media.
 - Write literal currency as `\$5`. Spaces immediately inside the delimiters are
   left alone: use `$x + y$`, rather than `$ x + y $`. Ordinary `$5 and $10`
   remains unchanged, but dollar pairs in prose can be ambiguous; escape literal
   dollar signs with a backslash.
 - Uses the editor's native undo command. Undo is not immediately reconverted.
 - Only acts when editing; opening a note does not bulk-convert existing notes.
-- The **Convert $…$** button scans old content in every field of the current note.
+- The **Convert $…$** button scans both formats in every field of the current note.
 
 ## Compatibility and validation
 

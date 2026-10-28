@@ -19,7 +19,7 @@
     function collect(field) {
         let text = "";
         const points = [];
-        function boundary() { text += "\n"; points.push(null); }
+        function boundary(hard = false) { text += hard ? "\uFFFC" : "\n"; points.push(null); }
         function walk(node) {
             if (node.nodeType === Node.TEXT_NODE) {
                 for (let offset = 0; offset < node.data.length; offset++) {
@@ -28,7 +28,7 @@
                 }
             } else if (node.nodeType === Node.ELEMENT_NODE) {
                 if (node.matches(ignored) || ["IMG", "AUDIO", "VIDEO", "IFRAME"].includes(node.tagName)) {
-                    boundary();
+                    boundary(true);
                     return;
                 }
                 const block = blocks.has(node.tagName);
@@ -45,8 +45,8 @@
         const matches = [];
         let opening = -1;
         for (let i = 0; i < text.length; i++) {
-            if (text[i] === "\n" || text[i] === "\r") { opening = -1; continue; }
-            // Keep existing MathJax, display math and legacy LaTeX untouched.
+            if (["\n", "\r", "\uFFFC"].includes(text[i])) { opening = -1; continue; }
+            // Keep existing MathJax and legacy LaTeX untouched.
             let close = null;
             if (!escaped(text, i)) {
                 if (text.startsWith("\\(", i)) close = "\\)";
@@ -54,7 +54,6 @@
                 else if (text.startsWith("[latex]", i)) close = "[/latex]";
                 else if (text.startsWith("[$$]", i)) close = "[/$$]";
                 else if (text.startsWith("[$]", i)) close = "[/$]";
-                else if (text.startsWith("$$", i)) close = "$$";
             }
             if (close) {
                 const end = text.indexOf(close, i + (close === "[/latex]" ? 7 : close.startsWith("[/") ? close.length - 1 : 2));
@@ -63,11 +62,28 @@
                 opening = -1;
                 continue;
             }
+            if (text.startsWith("$$", i) && !escaped(text, i)) {
+                opening = -1;
+                let end = -1;
+                let hardStop = -1;
+                for (let j = i + 2; j < text.length - 1; j++) {
+                    if (text[j] === "\uFFFC") { hardStop = j; break; }
+                    if (text.startsWith("$$", j) && !escaped(text, j)) { end = j; break; }
+                }
+                if (end < 0) {
+                    if (hardStop >= 0) { i = hardStop; continue; }
+                    break;
+                }
+                const body = text.slice(i + 2, end).trim();
+                if (body) matches.push({ start: i, end: end + 1, body, block: true });
+                i = end + 1;
+                continue;
+            }
             if (text[i] !== "$" || escaped(text, i)) continue;
             if (opening >= 0) {
                 const body = text.slice(opening + 1, i);
                 if (body && !/\s/u.test(body[0]) && !/\s/u.test(body[body.length - 1])) {
-                    matches.push({ start: opening, end: i, body });
+                    matches.push({ start: opening, end: i, body, block: false });
                     opening = -1;
                     continue;
                 }
@@ -100,7 +116,8 @@
             range.setStart(start.node, start.offset);
             range.setEnd(end.node, end.offset + 1);
             range.deleteContents();
-            range.insertNode(document.createTextNode(`\\(${match.body.replace(/\u00a0/g, " ")}\\)`));
+            const body = match.body.replace(/\u00a0/g, " ");
+            range.insertNode(document.createTextNode(match.block ? `\\[${body}\\]` : `\\(${body}\\)`));
         }
         return { html: template.innerHTML, converted: matches.length };
     }
@@ -152,7 +169,7 @@
         if (!selection || !selection.rangeCount || !selection.isCollapsed) return;
         let caret = selection.getRangeAt(0).cloneRange();
         if (!field.contains(caret.startContainer)) return;
-        const { text, points } = collect(field);
+        const { text } = collect(field);
         const matches = findMath(text);
         if (!matches.length) return;
 
@@ -163,6 +180,9 @@
         converting = true;
         try {
             for (const match of matches.reverse()) {
+                // Native insertion may merge or replace text nodes. Earlier
+                // offsets stay stable, but their original node references do not.
+                const { points } = collect(field);
                 const start = points[match.start];
                 const end = points[match.end];
                 if (!start || !end || !start.node.isConnected || !end.node.isConnected) continue;
@@ -171,7 +191,8 @@
                 range.setEnd(end.node, end.offset + 1);
                 const caretInside = range.comparePoint(caret.startContainer, caret.startOffset) === 0;
                 const id = `dollar-math-${++sequence}`;
-                let html = Mathjax.toUndecorated(`\\(${htmlEscape(match.body)}\\)`);
+                const body = htmlEscape(match.body);
+                let html = Mathjax.toUndecorated(match.block ? `\\[${body}\\]` : `\\(${body}\\)`);
                 // toUndecorated also respects Anki's 'render MathJax' setting.
                 html = html.replace("<anki-mathjax", `<anki-mathjax data-dollar-math-id="${id}"`);
                 selection.removeAllRanges();

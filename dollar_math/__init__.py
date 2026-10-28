@@ -40,7 +40,7 @@ def _add_button(buttons, editor):
         icon=None,
         cmd="autoDollarMathjaxScanNote",
         func=_scan_note,
-        tip="Convert $…$ to inline MathJax in every field of this note",
+        tip="Convert $…$ to inline and $$…$$ to block MathJax in every field of this note",
         label="Convert $…$",
         disables=False,
     ))
