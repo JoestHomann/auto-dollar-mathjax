@@ -1,0 +1,12 @@
+{
+  "name": "auto-dollar-mathjax",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anki editor add-on for automatic inline dollar math conversion",
+  "scripts": {
+    "test": "node test_editor.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
