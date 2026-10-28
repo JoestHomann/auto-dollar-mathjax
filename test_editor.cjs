@@ -96,6 +96,29 @@ const path = require('node:path');
   assert.equal(await page.evaluate(()=>stored()),'$z$');console.log('PASS rendered equation undo');
   await page.keyboard.press('Control+y');
   assert.equal(await page.evaluate(()=>stored()),'\\(z\\)');console.log('PASS rendered equation redo');
+  const manual=await page.evaluate(()=>{
+    const values=[
+      '<b>Older $x^2$</b> <img src="example.png">',
+      '$\\frac{1}{2}$',
+      '<div>Collapsed $a+b$ and $c$</div>',
+      '<code>$code$</code> and \\(existing\\)',
+      'HTML $a&lt;b &amp; c&gt;d$',
+      '<script>window.manualScriptExecuted=true</script>$safe$',
+    ];
+    window.manualStores=values.map(value=>({value, writes:0, subscribe(callback){callback(this.value);return ()=>{}},set(html){this.value=html;this.writes++}}));
+    window.require=name=>{if(name!=='anki/NoteEditor')throw Error(name);return {instances:[{fields:manualStores.map(content=>({editingArea:{content}}))}]}};
+    return {result:autoDollarMathjax.scanNote(), values:manualStores.map(s=>s.value), writes:manualStores.map(s=>s.writes), scriptRan:!!window.manualScriptExecuted};
+  });
+  assert.deepEqual(manual.result,{converted:6,fieldsChanged:5});
+  assert.equal(manual.values[0],'<b>Older \\(x^2\\)</b> <img src="example.png">');
+  assert.equal(manual.values[1],'\\(\\frac{1}{2}\\)');
+  assert.equal(manual.values[2],'<div>Collapsed \\(a+b\\) and \\(c\\)</div>');
+  assert.equal(manual.values[3],'<code>$code$</code> and \\(existing\\)');
+  assert.equal(manual.values[4],'HTML \\(a&lt;b &amp; c&gt;d\\)');
+  assert.deepEqual(manual.writes,[1,1,1,0,1,1]);
+  assert.equal(manual.scriptRan,false);console.log('PASS scan all stored fields, including collapsed and HTML-only fields');
+  assert.deepEqual(await page.evaluate(()=>autoDollarMathjax.scanNote()),{converted:0,fieldsChanged:0});console.log('PASS whole-note scan is idempotent');
+  assert.equal(await page.evaluate(()=>{window.require=()=>({instances:[]});return !!autoDollarMathjax.scanNote().error}),true);console.log('PASS unsupported editor produces useful feedback');
   assert.deepEqual(errors,[]);console.log('PASS no JavaScript errors');
   await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});

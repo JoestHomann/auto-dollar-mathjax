@@ -15,16 +15,38 @@ OUTPUT = ROOT / "dist"
 OUTPUT.mkdir(exist_ok=True)
 
 ast.parse((SOURCE / "__init__.py").read_text(encoding="utf-8"))
-hooks = types.SimpleNamespace(editor_did_init=[])
+hooks = types.SimpleNamespace(editor_did_init=[], editor_did_init_buttons=[])
 aqt = types.ModuleType("aqt")
 aqt.gui_hooks = hooks
 sys.modules["aqt"] = aqt
+utils = types.ModuleType("aqt.utils")
+notifications = []
+utils.tooltip = lambda message, **kwargs: notifications.append(message)
+utils.showWarning = lambda message, **kwargs: notifications.append(message)
+sys.modules["aqt.utils"] = utils
 runpy.run_path(str(SOURCE / "__init__.py"))
 assert len(hooks.editor_did_init) == 1
+assert len(hooks.editor_did_init_buttons) == 1
 injected = []
 hooks.editor_did_init[0](types.SimpleNamespace(web=types.SimpleNamespace(eval=injected.append)))
 assert injected == [(SOURCE / "dollar_math.js").read_text(encoding="utf-8")]
 print("PASS Python import, hook registration, and script injection")
+buttons = []
+button_definition = {}
+def add_button(**kwargs):
+    button_definition.update(kwargs)
+    return "<button>Convert $…$</button>"
+editor = types.SimpleNamespace(
+    addButton=add_button, parentWindow=None,
+    web=types.SimpleNamespace(evalWithCallback=lambda script, callback: callback({"converted": 3, "fieldsChanged": 2})),
+    saveNow=lambda callback, **kwargs: callback(),
+)
+hooks.editor_did_init_buttons[0](buttons, editor)
+assert buttons == ["<button>Convert $…$</button>"]
+assert button_definition["disables"] is False
+button_definition["func"](editor)
+assert notifications[-1] == "Converted 3 expression(s) in 2 field(s)."
+print("PASS whole-note toolbar button, save callback, and conversion feedback")
 
 with zipfile.ZipFile(OUTPUT / "Auto-Dollar-MathJax.ankiaddon", "w", zipfile.ZIP_DEFLATED) as archive:
     for file in sorted(SOURCE.iterdir()):
@@ -37,7 +59,8 @@ with zipfile.ZipFile(OUTPUT / "Auto-Dollar-MathJax-source.zip", "w", zipfile.ZIP
         if file.is_file():
             archive.write(file, "dollar_math/" + file.name)
     archive.writestr("test_editor.cjs", test)
-    archive.writestr("TESTING.md", "Run `npm install playwright`, `npx playwright install chromium`, then `node test_editor.cjs`. Optionally set CHROME_BIN to an installed Chrome executable. The tests use a shadow DOM and native-equation lifecycle fixture, not a live Anki process.\n")
+    for name in ("build.py", "package.json", ".gitignore", ".gitattributes", "TESTING.md", "README.md"):
+        archive.write(WORK / name, name)
 
 shutil.copyfile(SOURCE / "README.md", OUTPUT / "README.md")
 with zipfile.ZipFile(OUTPUT / "Auto-Dollar-MathJax.ankiaddon") as archive:

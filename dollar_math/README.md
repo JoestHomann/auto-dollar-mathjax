@@ -4,9 +4,21 @@ Type `$x^2$` in an Anki note field. As soon as you type the closing `$`, the
 add-on replaces it with Anki's native inline MathJax equation. The saved field
 contains `\(x^2\)`.
 
+## Convert older notes
+
+Open the note in **Browse** or **Edit Current**, then click **Convert $…$** in
+the editor toolbar. The button scans every field of that note, including
+collapsed fields and fields displayed as HTML, and converts completed `$…$`
+expressions. Anki saves the changes normally and reports how many expressions
+were converted. You can also use it on a note you are adding.
+
+This scans the current note, including the fields used on both sides of its
+cards. It does not change other notes in your collection. Pressing it again
+leaves expressions that are already converted alone.
+
 ## Install
 
-1. Build the add-on with `python build.py`, then use `dist/Auto-Dollar-MathJax.ankiaddon`.
+1. Download [Auto-Dollar-MathJax.ankiaddon](https://github.com/JoestHomann/auto-dollar-mathjax/raw/refs/heads/main/downloads/Auto-Dollar-MathJax.ankiaddon), or build it with `python build.py`.
 2. In Anki Desktop, open **Tools > Add-ons > Install from file…**.
 3. Select the downloaded `.ankiaddon` file and restart Anki.
 4. Open Add, Browse, or Edit Current and type `$x^2$` into a note field.
@@ -43,6 +55,7 @@ into TeX. For example, use `\frac{1}{2}` for a stacked fraction.
   dollar signs with a backslash.
 - Uses the editor's native undo command. Undo is not immediately reconverted.
 - Only acts when editing; opening a note does not bulk-convert existing notes.
+- The **Convert $…$** button scans old content in every field of the current note.
 
 ## Compatibility and validation
 

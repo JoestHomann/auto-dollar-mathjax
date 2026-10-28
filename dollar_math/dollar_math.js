@@ -86,6 +86,67 @@
         return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\u00a0/g, " ");
     }
 
+    function convertStoredHTML(html) {
+        // Templates parse stored HTML inertly: scripts and media do not run.
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const { text, points } = collect(template.content);
+        const matches = findMath(text);
+        if (!matches.length) return { html, converted: 0 };
+        for (const match of matches.reverse()) {
+            const start = points[match.start];
+            const end = points[match.end];
+            const range = document.createRange();
+            range.setStart(start.node, start.offset);
+            range.setEnd(end.node, end.offset + 1);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(`\\(${match.body.replace(/\u00a0/g, " ")}\\)`));
+        }
+        return { html: template.innerHTML, converted: matches.length };
+    }
+
+    function scanNote() {
+        if (converting) return { error: "A conversion is already in progress." };
+        let noteEditor;
+        try { noteEditor = require("anki/NoteEditor").instances[0]; } catch (_) { /* handled below */ }
+        const fields = noteEditor?.fields;
+        if (!fields?.length || fields.some(field => !field.editingArea?.content?.set)) {
+            return { error: "This Anki editor does not expose its note fields. Please update Anki and try again." };
+        }
+
+        // Read all note stores, including collapsed fields and HTML-only fields.
+        const changes = [];
+        for (const field of fields) {
+            const store = field.editingArea.content;
+            let html;
+            const unsubscribe = store.subscribe(value => { html = value; });
+            unsubscribe();
+            if (typeof html !== "string") return { error: "Could not read all fields of this note." };
+            const result = convertStoredHTML(html);
+            if (result.converted) changes.push({ store, ...result });
+        }
+
+        const result = { converted: 0, fieldsChanged: changes.length };
+        if (!changes.length) return result;
+        let active = document.activeElement;
+        while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+        converting = true;
+        try {
+            // Anki mirrors store changes back into rich text while it is blurred.
+            active?.blur();
+            for (const change of changes) {
+                change.store.set(change.html);
+                result.converted += change.converted;
+            }
+        } finally {
+            if (active?.isConnected) active.focus({ preventScroll: true });
+            converting = false;
+        }
+        return result;
+    }
+
+    window.autoDollarMathjax = { scanNote };
+
     function convert(field) {
         const selection = selectionFor(field);
         if (!selection || !selection.rangeCount || !selection.isCollapsed) return;
