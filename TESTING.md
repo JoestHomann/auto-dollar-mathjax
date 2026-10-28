@@ -1,0 +1,1 @@
+Run `npm install playwright`, `npx playwright install chromium`, then `node test_editor.cjs`. Optionally set CHROME_BIN to an installed Chrome executable. The tests use a shadow DOM and native-equation lifecycle fixture, not a live Anki process.
